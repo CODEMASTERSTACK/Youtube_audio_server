@@ -17,6 +17,17 @@ if (ffmpegPath) {
 const app = express();
 app.use(cors());
 
+// Optional: supply a YouTube cookie to improve reliability for restricted/consented videos
+// Set env PLAYDL_COOKIE with your browser's youtube.com cookie string (use cautiously)
+if (process.env.PLAYDL_COOKIE) {
+  try {
+    playdl.setToken({ youtube: { cookie: process.env.PLAYDL_COOKIE } });
+    console.log('play-dl cookie token set');
+  } catch (e) {
+    console.warn('Failed to set play-dl cookie token:', e?.message || e);
+  }
+}
+
 // Simple health check
 app.get('/', (_req, res) => {
   res.type('text/plain').send('YouTube audio downloader is running');
