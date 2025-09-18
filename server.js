@@ -3,7 +3,7 @@
 // Install: npm i express ytdl-core fluent-ffmpeg ffmpeg-static cors
 
 const express = require('express');
-const ytdl = require('ytdl-core');
+const ytdl = require('ytdl-core-discord');
 const cors = require('cors');
 const ffmpeg = require('fluent-ffmpeg');
 const ffmpegPath = require('ffmpeg-static');
@@ -87,5 +87,6 @@ const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`YouTube audio server listening on http://localhost:${PORT}`);
 });
+
 
 
