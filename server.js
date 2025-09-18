@@ -1,9 +1,10 @@
 // Lightweight Express proxy to stream YouTube audio as MP3
-// Requires: express, play-dl, fluent-ffmpeg, ffmpeg-static, cors
-// Install: npm i express play-dl fluent-ffmpeg ffmpeg-static cors
+// Requires: express, play-dl, ytdl-core, fluent-ffmpeg, ffmpeg-static, cors
+// Install: npm i express play-dl ytdl-core fluent-ffmpeg ffmpeg-static cors
 
 const express = require('express');
 const playdl = require('play-dl');
+const ytdl = require('ytdl-core');
 const cors = require('cors');
 const ffmpeg = require('fluent-ffmpeg');
 const ffmpegPath = require('ffmpeg-static');
@@ -35,9 +36,20 @@ app.get('/download', async (req, res) => {
       return res.status(400).json({ error: 'Invalid YouTube URL' });
     }
 
-    // Fetch basic info for filename
-    const info = await playdl.video_basic_info(url);
-    const rawTitle = info?.video_details?.title || 'youtube-audio';
+    // Normalize to a clean watch URL
+    const cleanUrl = `https://www.youtube.com/watch?v=${id}`;
+
+    // Fetch basic info for filename (try play-dl, fallback to ytdl)
+    let rawTitle = 'youtube-audio';
+    try {
+      const info = await playdl.video_basic_info(cleanUrl);
+      rawTitle = info?.video_details?.title || rawTitle;
+    } catch (_) {
+      try {
+        const info2 = await ytdl.getInfo(cleanUrl);
+        rawTitle = info2?.videoDetails?.title || rawTitle;
+      } catch (_) {}
+    }
     const safeTitle = rawTitle.replace(/[^a-z0-9\- _\.]/gi, '_').slice(0, 80);
     const filename = `${safeTitle}.mp3`;
 
@@ -49,9 +61,19 @@ app.get('/download', async (req, res) => {
     // Allow range requests for better streaming support
     res.setHeader('Accept-Ranges', 'bytes');
 
-    // Get an actual audio stream url using play-dl (handles signatures/age gate better)
-    const source = await playdl.stream(url, { quality: 2 }); // 2 ~ highest audio quality
-    const audioStream = source.stream;
+    // Get an actual audio stream
+    let audioStream;
+    try {
+      const source = await playdl.stream(cleanUrl, { quality: 2 });
+      audioStream = source.stream;
+    } catch (e) {
+      // Fallback to ytdl-core
+      audioStream = ytdl(cleanUrl, {
+        quality: 'highestaudio',
+        filter: 'audioonly',
+        highWaterMark: 1 << 25,
+      });
+    }
 
     // Transcode to mp3 on-the-fly using ffmpeg
     const command = ffmpeg()
