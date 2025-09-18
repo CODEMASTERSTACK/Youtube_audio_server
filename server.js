@@ -1,9 +1,9 @@
 // Lightweight Express proxy to stream YouTube audio as MP3
-// Requires: express, ytdl-core, fluent-ffmpeg, ffmpeg-static, cors
-// Install: npm i express ytdl-core fluent-ffmpeg ffmpeg-static cors
+// Requires: express, play-dl, fluent-ffmpeg, ffmpeg-static, cors
+// Install: npm i express play-dl fluent-ffmpeg ffmpeg-static cors
 
 const express = require('express');
-const ytdl = require('ytdl-core-discord');
+const playdl = require('play-dl');
 const cors = require('cors');
 const ffmpeg = require('fluent-ffmpeg');
 const ffmpegPath = require('ffmpeg-static');
@@ -29,15 +29,15 @@ app.get('/download', async (req, res) => {
       return res.status(400).json({ error: 'Missing required query parameter: url' });
     }
 
-    // Validate YouTube URL
-    const valid = ytdl.validateURL(url);
-    if (!valid) {
+    // Validate URL by trying to parse video ID
+    const id = playdl.extractID(url);
+    if (!id) {
       return res.status(400).json({ error: 'Invalid YouTube URL' });
     }
 
-    // Fetch video info to derive a filename
-    const info = await ytdl.getInfo(url);
-    const rawTitle = info?.videoDetails?.title || 'youtube-audio';
+    // Fetch basic info for filename
+    const info = await playdl.video_basic_info(url);
+    const rawTitle = info?.video_details?.title || 'youtube-audio';
     const safeTitle = rawTitle.replace(/[^a-z0-9\- _\.]/gi, '_').slice(0, 80);
     const filename = `${safeTitle}.mp3`;
 
@@ -49,12 +49,9 @@ app.get('/download', async (req, res) => {
     // Allow range requests for better streaming support
     res.setHeader('Accept-Ranges', 'bytes');
 
-    // Get highest quality audio stream (usually webm/opus)
-    const audioStream = ytdl(url, {
-      quality: 'highestaudio',
-      filter: 'audioonly',
-      highWaterMark: 1 << 25, // larger buffer to reduce stalls
-    });
+    // Get an actual audio stream url using play-dl (handles signatures/age gate better)
+    const source = await playdl.stream(url, { quality: 2 }); // 2 ~ highest audio quality
+    const audioStream = source.stream;
 
     // Transcode to mp3 on-the-fly using ffmpeg
     const command = ffmpeg()
@@ -87,6 +84,5 @@ const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`YouTube audio server listening on http://localhost:${PORT}`);
 });
-
 
 
