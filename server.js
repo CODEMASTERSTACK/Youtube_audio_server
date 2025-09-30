@@ -2,14 +2,16 @@ const express = require("express");
 const cors = require("cors");
 const ytdl = require("ytdl-core");
 const ffmpeg = require("fluent-ffmpeg");
-const fs = require("fs");
+const ffmpegPath = require("ffmpeg-static");
 const { PassThrough } = require("stream");
+
+ffmpeg.setFfmpegPath(ffmpegPath);
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Root route for status
+// Root route
 app.get("/", (req, res) => {
   res.send(`
     <h1>✅ YouTube Audio Server is running</h1>
@@ -20,14 +22,11 @@ app.get("/", (req, res) => {
   `);
 });
 
-// Main route to download audio
+// Download route
 app.post("/download-audio", async (req, res) => {
   try {
     const { videoUrl } = req.body;
-
-    if (!videoUrl) {
-      return res.status(400).json({ error: "videoUrl is required" });
-    }
+    if (!videoUrl) return res.status(400).json({ error: "videoUrl is required" });
 
     const stream = ytdl(videoUrl, { quality: "highestaudio" });
     const output = new PassThrough();
@@ -50,6 +49,4 @@ app.post("/download-audio", async (req, res) => {
 });
 
 const PORT = process.env.PORT || 10000;
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
