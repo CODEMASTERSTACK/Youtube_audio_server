@@ -1,51 +1,38 @@
+const { spawn } = require("child_process");
 const express = require("express");
 const cors = require("cors");
-const ytdl = require("ytdl-core");
-const ffmpeg = require("fluent-ffmpeg");
-const ffmpegPath = require("ffmpeg-static");
-const { PassThrough } = require("stream");
-
-ffmpeg.setFfmpegPath(ffmpegPath);
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Root route
 app.get("/", (req, res) => {
-  res.send(`
-    <h1>✅ YouTube Audio Server is running</h1>
-    <p>Use <code>POST /download-audio</code> with JSON body:</p>
-    <pre>{
-      "videoUrl": "https://www.youtube.com/watch?v=XXXX"
-    }</pre>
-  `);
+  res.send("✅ YouTube Audio Server running. Use POST /download-audio with { videoUrl }");
 });
 
-// Download route
-app.post("/download-audio", async (req, res) => {
-  try {
-    const { videoUrl } = req.body;
-    if (!videoUrl) return res.status(400).json({ error: "videoUrl is required" });
+app.post("/download-audio", (req, res) => {
+  const { videoUrl } = req.body;
+  if (!videoUrl) return res.status(400).json({ error: "videoUrl is required" });
 
-    const stream = ytdl(videoUrl, { quality: "highestaudio" });
-    const output = new PassThrough();
+  res.set({
+    "Content-Type": "audio/mpeg",
+    "Content-Disposition": "attachment; filename=audio.mp3",
+  });
 
-    ffmpeg(stream)
-      .audioBitrate(128)
-      .toFormat("mp3")
-      .pipe(output);
+  const ytDlp = spawn("yt-dlp", ["-f", "bestaudio", "-o", "-", videoUrl]);
 
-    res.set({
-      "Content-Type": "audio/mpeg",
-      "Content-Disposition": "attachment; filename=audio.mp3",
-    });
+  ytDlp.stdout.pipe(res);
 
-    output.pipe(res);
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: "Failed to process audio" });
-  }
+  ytDlp.stderr.on("data", (data) => {
+    console.error(`yt-dlp error: ${data}`);
+  });
+
+  ytDlp.on("close", (code) => {
+    if (code !== 0) {
+      console.error(`yt-dlp exited with code ${code}`);
+      res.end();
+    }
+  });
 });
 
 const PORT = process.env.PORT || 10000;
