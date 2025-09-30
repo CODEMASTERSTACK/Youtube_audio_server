@@ -1,37 +1,55 @@
 const express = require("express");
 const cors = require("cors");
-const { exec } = require("child_process");
-const path = require("path");
+const ytdl = require("ytdl-core");
+const ffmpeg = require("fluent-ffmpeg");
 const fs = require("fs");
+const { PassThrough } = require("stream");
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-app.post("/download-audio", async (req, res) => {
-  const { videoUrl } = req.body;
-
-  if (!videoUrl) {
-    return res.status(400).json({ error: "YouTube URL is required" });
-  }
-
-  const outputFile = path.join(__dirname, "output.mp3");
-  const command = `yt-dlp -x --audio-format mp3 -o "${outputFile}" "${videoUrl}"`;
-
-  exec(command, (error, stdout, stderr) => {
-    if (error) {
-      console.error("yt-dlp error:", error);
-      return res.status(500).json({ error: "Failed to download audio" });
-    }
-
-    res.download(outputFile, "audio.mp3", (err) => {
-      if (err) console.error("Error sending file:", err);
-      if (fs.existsSync(outputFile)) {
-        fs.unlinkSync(outputFile);
-      }
-    });
-  });
+// Root route for status
+app.get("/", (req, res) => {
+  res.send(`
+    <h1>✅ YouTube Audio Server is running</h1>
+    <p>Use <code>POST /download-audio</code> with JSON body:</p>
+    <pre>{
+      "videoUrl": "https://www.youtube.com/watch?v=XXXX"
+    }</pre>
+  `);
 });
 
-const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`✅ Server running on port ${PORT}`));
+// Main route to download audio
+app.post("/download-audio", async (req, res) => {
+  try {
+    const { videoUrl } = req.body;
+
+    if (!videoUrl) {
+      return res.status(400).json({ error: "videoUrl is required" });
+    }
+
+    const stream = ytdl(videoUrl, { quality: "highestaudio" });
+    const output = new PassThrough();
+
+    ffmpeg(stream)
+      .audioBitrate(128)
+      .toFormat("mp3")
+      .pipe(output);
+
+    res.set({
+      "Content-Type": "audio/mpeg",
+      "Content-Disposition": "attachment; filename=audio.mp3",
+    });
+
+    output.pipe(res);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Failed to process audio" });
+  }
+});
+
+const PORT = process.env.PORT || 10000;
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+});
