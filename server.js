@@ -19,7 +19,9 @@ app.post("/download-audio", (req, res) => {
     "Content-Disposition": "attachment; filename=audio.mp3",
   });
 
-  const ytDlp = spawn("yt-dlp", ["-f", "bestaudio", "-o", "-", videoUrl]);
+  // Use full path for yt-dlp
+  const ytDlpPath = "/usr/local/bin/yt-dlp"; 
+  const ytDlp = spawn(ytDlpPath, ["-f", "bestaudio", "-o", "-", videoUrl]);
 
   ytDlp.stdout.pipe(res);
 
